@@ -2,6 +2,7 @@ import streamlit as st
 import pickle
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # Load model
 model = pickle.load(open('model/model.pkl','rb'))
@@ -9,7 +10,7 @@ model = pickle.load(open('model/model.pkl','rb'))
 st.set_page_config(page_title="Loan Prediction", layout="wide")
 
 # ==============================
-# 🧠 SESSION STATE (PAGE CONTROL)
+# 🧠 SESSION STATE
 # ==============================
 if "page" not in st.session_state:
     st.session_state.page = "main"
@@ -17,27 +18,147 @@ if "page" not in st.session_state:
 if "result_df" not in st.session_state:
     st.session_state.result_df = None
 
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "Prediction"
+
 # ==============================
 # 📊 RESULT PAGE
 # ==============================
 if st.session_state.page == "result":
 
-    st.title("📊 Prediction Results")
-
     df = st.session_state.result_df
 
-    if df is not None:
-        st.success("✅ Predictions Generated Successfully!")
-        st.dataframe(df)
+    st.title("📊 Loan Analysis Dashboard")
 
-        # Download button
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "📥 Download Results",
-            csv,
-            "loan_predictions.csv",
-            "text/csv"
-        )
+    if df is not None:
+
+        # ==============================
+        # 🔥 TOP RIGHT BUTTONS (PRO UI)
+        # ==============================
+        col_title, col_btn1, col_btn2 = st.columns([6,1,1])
+
+        with col_btn1:
+            if st.button("📋 Predictions"):
+                st.session_state.view_mode = "Prediction"
+
+        with col_btn2:
+            if st.button("📊 Charts"):
+                st.session_state.view_mode = "Charts"
+
+        st.markdown("---")
+
+        # ==============================
+        # 📋 PREDICTION TABLE VIEW
+        # ==============================
+        if st.session_state.view_mode == "Prediction":
+
+            st.subheader("📋 Prediction Results")
+
+            def highlight(row):
+                if row['Prediction'] == 'Rejected':
+                    return ['background-color: rgba(220, 38, 38, 0.12)'] * len(row)
+                else:
+                    return ['background-color: rgba(37, 99, 235, 0.12)'] * len(row)
+
+            st.dataframe(df.style.apply(highlight, axis=1), use_container_width=True)
+
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Results", csv, "loan_predictions.csv")
+
+        # ==============================
+        # 📊 CHART DASHBOARD VIEW (GRID STYLE)
+        # ==============================
+        elif st.session_state.view_mode == "Charts":
+
+            st.subheader("📊 Analytics Dashboard")
+
+            # ==============================
+            # 📈 METRICS
+            # ==============================
+            st.markdown("### 📈 Overview Metrics")
+            colm1, colm2, colm3 = st.columns(3)
+
+            with colm1:
+                st.metric("Total Applications", len(df))
+
+            with colm2:
+                approved = (df['Prediction'] == 'Approved').sum()
+                st.metric("Approved Loans", approved)
+
+            with colm3:
+                rejected = (df['Prediction'] == 'Rejected').sum()
+                st.metric("Rejected Loans", rejected)
+
+            st.markdown("---")
+
+            # ==============================
+            # 📊 ROW 1 → PIE + HISTOGRAM
+            # ==============================
+            col1, col2 = st.columns(2)
+
+            # PIE CHART
+            with col1:
+                st.markdown("#### 🟢 Loan Approval Distribution")
+                fig1, ax1 = plt.subplots(figsize=(5,5))
+                colors = ['#22c55e', '#ef4444']
+                df['Prediction'].value_counts().plot(
+                    kind='pie',
+                    autopct='%1.1f%%',
+                    colors=colors,
+                    startangle=90,
+                    wedgeprops={'edgecolor': 'white'},
+                    textprops={'fontsize': 10},
+                    ax=ax1
+                )
+                ax1.set_ylabel('')
+                ax1.axis('equal') 
+                plt.tight_layout() 
+                st.pyplot(fig1, use_container_width=True)
+
+            # HISTOGRAM
+            with col2:
+                st.markdown("#### 📊 Confidence Score Distribution")
+                fig2, ax2 = plt.subplots(figsize=(5,5))
+                ax2.hist(df['Confidence'], bins=15, edgecolor='black')
+                ax2.set_xlabel("Confidence Score")
+                ax2.set_ylabel("Frequency")
+                ax2.grid(alpha=0.3)
+                st.pyplot(fig2, use_container_width=True)
+
+            st.markdown("---")
+
+            # ==============================
+            # 📊 ROW 2 → SCATTER + BAR
+            # ==============================
+            col3, col4 = st.columns(2)
+
+            # SCATTER
+            with col3:
+                st.markdown("#### 💰 Income vs Loan Amount")
+                fig3, ax3 = plt.subplots(figsize=(4,4))
+                colors = df['Prediction'].map({'Approved':'green','Rejected':'red'})
+                ax3.scatter(
+                    df['Total_Income'],
+                    df['LoanAmount'],
+                    c=colors,
+                    alpha=0.7,
+                    edgecolors='black'
+                )
+                ax3.set_xlabel("Total Income")
+                ax3.set_ylabel("Loan Amount")
+                ax3.grid(alpha=0.3)
+                st.pyplot(fig3, use_container_width=True)
+
+            # BAR CHART
+            with col4:
+                st.markdown("#### 🏘️ Property Area vs Approval")
+                fig4, ax4 = plt.subplots(figsize=(4,4))
+                area_group = df.groupby('Property_Area')['Prediction'].value_counts().unstack()
+                area_group.plot(kind='bar', ax=ax4)
+                ax4.set_xlabel("Property Area")
+                ax4.set_ylabel("Count")
+                ax4.grid(axis='y', alpha=0.3)
+                st.pyplot(fig4, use_container_width=True)
 
     if st.button("⬅️ Back to Main Page"):
         st.session_state.page = "main"
@@ -47,17 +168,16 @@ if st.session_state.page == "result":
 # ==============================
 # 🏦 MAIN PAGE
 # ==============================
-
 st.title("🏦 Loan Default Prediction System")
 st.markdown("### Predict loan approval using ML (Individual + Bulk CSV)")
 
-# Tabs
-tab1, tab2 = st.tabs(["🔹 Single Prediction", "📂 Bulk CSV Prediction"])
+tab1, tab2 = st.tabs(["🔹 Single Prediction", "📂 Bulk Prediction"])
 
 # ==============================
-# 🔹 TAB 1: SINGLE PREDICTION
+# 🔹 SINGLE PREDICTION
 # ==============================
 with tab1:
+
     st.subheader("Enter Applicant Details")
 
     col1, col2, col3 = st.columns(3)
@@ -85,7 +205,6 @@ with tab1:
     with col5:
         co_income = st.number_input("Coapplicant Income")
 
-    # Encoding
     dependents = 3 if dependents=='3+' else int(dependents)
     gender = 1 if gender=='Male' else 0
     married = 1 if married=='Yes' else 0
@@ -93,7 +212,6 @@ with tab1:
     self_emp = 1 if self_emp=='Yes' else 0
     area = {'Urban':2,'Semiurban':1,'Rural':0}[area]
 
-    # Feature Engineering
     total_income = income + co_income
     emi = loan_amt / term if term != 0 else 0
 
@@ -102,72 +220,38 @@ with tab1:
                           area, total_income, emi]])
 
     if st.button("🔍 Predict Loan Status"):
+
         pred = model.predict(features)[0]
         prob = model.predict_proba(features)[0][1]
-
-        st.markdown("---")
 
         if pred == 1:
             st.success(f"✅ Loan Approved (Confidence: {prob:.2f})")
         else:
             st.error(f"❌ Loan Rejected (Risk Score: {1-prob:.2f})")
 
-# # ==============================
-# 📂 TAB 2: CSV BULK PREDICTION
+# ==============================
+# 📂 BULK CSV
 # ==============================
 with tab2:
-    st.subheader("Upload CSV File for Bulk Prediction")
 
-    # =============================
-    # STORE FILE IN SESSION
-    # =============================
     if "uploaded_df" not in st.session_state:
         st.session_state.uploaded_df = None
 
     file = st.file_uploader("Upload CSV", type=["csv"])
 
-    # Save uploaded file
     if file is not None:
         st.session_state.uploaded_df = pd.read_csv(file)
 
-    # Use stored dataframe
     if st.session_state.uploaded_df is not None:
 
         df = st.session_state.uploaded_df.copy()
 
-        st.write("📊 Uploaded Data Preview:")
-        st.dataframe(df.head(10))
+        st.dataframe(df.head())
 
-        # =============================
-        # 🗑️ REMOVE BUTTON
-        # =============================
         if st.button("🗑️ Remove Dataset"):
             st.session_state.uploaded_df = None
             st.rerun()
 
-        # =============================
-        # 🔍 MISSING VALUES (PRO UI)
-        # =============================
-        st.markdown("### 🔍 Missing Values Analysis")
-
-        missing_df = df.isnull().sum().reset_index()
-        missing_df.columns = ['Column Name', 'Missing Values']
-        missing_df = missing_df[missing_df['Missing Values'] > 0]
-
-        if missing_df.empty:
-            st.success("✅ No missing values found in the dataset!")
-        else:
-            missing_df['Percentage (%)'] = (
-                missing_df['Missing Values'] / len(df) * 100
-            ).round(2)
-
-            missing_df = missing_df.sort_values(by='Missing Values', ascending=False)
-
-            st.dataframe(missing_df, use_container_width=True)
-
-        # =============================
-        # SAFE PREPROCESSING
-        # =============================
         df.fillna({
             'Gender': 'Male',
             'Married': 'Yes',
@@ -194,9 +278,6 @@ with tab2:
                 'Loan_Amount_Term','Credit_History','Property_Area',
                 'Total_Income','EMI']]
 
-        # =============================
-        # PREDICT BUTTON
-        # =============================
         if st.button("🚀 Predict Uploaded Data"):
 
             preds = model.predict(X)
@@ -208,4 +289,3 @@ with tab2:
 
             st.session_state.result_df = df
             st.session_state.page = "result"
-            
